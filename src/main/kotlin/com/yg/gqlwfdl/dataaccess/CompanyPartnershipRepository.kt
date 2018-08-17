@@ -6,7 +6,6 @@ import com.yg.gqlwfdl.dataaccess.db.tables.records.CompanyPartnershipRecord
 import com.yg.gqlwfdl.dataaccess.db.tables.records.CompanyRecord
 import com.yg.gqlwfdl.dataaccess.joins.*
 import com.yg.gqlwfdl.services.CompanyPartnership
-import io.reactiverse.pgclient.PgPool
 import io.reactiverse.pgclient.Row
 import org.jooq.DSLContext
 import org.jooq.Record
@@ -24,12 +23,12 @@ interface CompanyPartnershipRepository : EntityRepository<CompanyPartnership, Lo
  */
 @Repository
 class DBCompanyPartnershipRepository(create: DSLContext,
-                                     connectionPool: PgPool,
+                                     queryRunner: QueryRunner,
                                      recordToEntityConverterProvider: JoinedRecordToEntityConverterProvider,
                                      clientFieldToJoinMapper: ClientFieldToJoinMapper,
                                      recordProvider: RecordProvider)
     : SingleRowDBEntityRepository<CompanyPartnership, Long, CompanyPartnershipRecord, CompanyPartnershipQueryInfo>(
-        create, connectionPool, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
+        create, queryRunner, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
         COMPANY_PARTNERSHIP, COMPANY_PARTNERSHIP.ID),
         CompanyPartnershipRepository {
 

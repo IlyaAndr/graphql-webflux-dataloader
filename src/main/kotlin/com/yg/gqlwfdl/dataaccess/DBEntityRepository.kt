@@ -4,16 +4,9 @@ import com.yg.gqlwfdl.ClientField
 import com.yg.gqlwfdl.dataaccess.DBEntityRepository.JoinRequestSource.Companion.FIELD_PATH_SEPARATOR
 import com.yg.gqlwfdl.dataaccess.joins.*
 import com.yg.gqlwfdl.letIfAny
-import com.yg.gqlwfdl.logMessage
 import com.yg.gqlwfdl.services.Entity
-import com.yg.gqlwfdl.withLogging
-import io.reactiverse.pgclient.PgPool
 import io.reactiverse.pgclient.Row
 import org.jooq.*
-import org.jooq.conf.ParamType
-import reactor.core.publisher.Mono
-import reactor.core.publisher.MonoSink
-import java.util.concurrent.CompletableFuture
 
 /**
  * A repository providing access to an entity (aka domain model object) (of type [TEntity]), by querying one or more
@@ -32,7 +25,7 @@ import java.util.concurrent.CompletableFuture
  * @param TQueryInfo The type of the [QueryInfo] object which this repository uses. See [getQueryInfo] for details.
  * @property create The DSL context used as the starting point for all operations when working with the JOOQ API. This
  * is automatically injected by spring-boot-starter-jooq.
- * @property connectionPool The database connection pool.
+ * @property queryRunner The object to use to actually execute the queries (as distinct from building up the SQL for them).
  * @property recordToEntityConverterProvider The object to convert [Record]s to [TEntity] objects.
  * @property clientFieldToJoinMapper The object to use when finding objects in the context of a GraphQL request, to
  * know which joins to add to the database queries, based on the requested GraphQL fields.
@@ -44,7 +37,7 @@ import java.util.concurrent.CompletableFuture
 abstract class DBEntityRepository<
         TEntity : Entity<TId>, TId : Any, TRecord : Record, TQueryInfo : QueryInfo<TRecord>>(
         protected val create: DSLContext,
-        private val connectionPool: PgPool,
+        protected val queryRunner: QueryRunner,
         protected val recordToEntityConverterProvider: JoinedRecordToEntityConverterProvider,
         private val clientFieldToJoinMapper: ClientFieldToJoinMapper,
         protected val recordProvider: RecordProvider,
@@ -58,11 +51,7 @@ abstract class DBEntityRepository<
      * client fields. Additionally, its [creationListener][EntityRequestInfo.entityCreationListener] is informed of any
      * created entities.
      */
-    override fun findAll(requestInfo: EntityRequestInfo?): CompletableFuture<List<TEntity>> {
-        return withLogging("querying ${table.name} for all records") {
-            find(requestInfo)
-        }
-    }
+    override suspend fun findAll(requestInfo: EntityRequestInfo?) = find(requestInfo)
 
     /**
      * See [EntityRepository.findByIds]. Note that in this implementation the passed in [EntityRequestInfo] (if any) is
@@ -70,11 +59,8 @@ abstract class DBEntityRepository<
      * client fields. Additionally, its [creationListener][EntityRequestInfo.entityCreationListener] is informed of any
      * created entities.
      */
-    override fun findByIds(ids: List<TId>, requestInfo: EntityRequestInfo?): CompletableFuture<List<TEntity>> {
-        return withLogging("querying ${table.name} for records with IDs $ids") {
+    override suspend fun findByIds(ids: List<TId>, requestInfo: EntityRequestInfo?): List<TEntity> =
             find(requestInfo) { listOf(it.primaryTable.field(idField).`in`(ids)) }
-        }
-    }
 
     /**
      * Finds all the records that match the conditions supplied by the passed in [conditionProvider], if any.
@@ -84,9 +70,9 @@ abstract class DBEntityRepository<
      * @param conditionProvider The object that will supply any conditions that should be added to the query. If null,
      * no conditions are applied, and every record is returned.
      */
-    protected abstract fun find(requestInfo: EntityRequestInfo? = null,
-                                conditionProvider: ((TQueryInfo) -> List<Condition>)? = null)
-            : CompletableFuture<List<TEntity>>
+    protected abstract suspend fun find(requestInfo: EntityRequestInfo? = null,
+                                        conditionProvider: ((TQueryInfo) -> List<Condition>)? = null)
+            : List<TEntity>
 
     /**
      * Gets an instance of a [TQueryInfo] object to use to store information about a query as it's being built up and
@@ -98,26 +84,6 @@ abstract class DBEntityRepository<
     // Ignore unsafe cast - we know this is safe.
     @Suppress("UNCHECKED_CAST")
     protected open fun getQueryInfo(table: Table<TRecord> = this.table) = QueryInfo(table) as TQueryInfo
-
-    /**
-     * Executes the query specified by the receiver, and returns a [CompletableFuture] which will complete when the
-     * query's results are returned.
-     */
-    protected fun SelectFinalStep<Record>.fetchRowsAsync(): CompletableFuture<List<Row>> {
-
-        return Mono.create { sink: MonoSink<List<Row>> ->
-            try {
-                val sql = getSQL(ParamType.INLINED)
-                logMessage("Executing query: $sql")
-                connectionPool.query(sql) {
-                    if (it.succeeded()) sink.success(it.result().toList())
-                    else sink.error(Exception("Error running query", it.cause()))
-                }
-            } catch (e: Exception) {
-                sink.error(Exception("Error running query", e))
-            }
-        }.toFuture()
-    }
 
     /**
      * Defines a table in a query which can be the source of a join (i.e. the primary side of the join).
@@ -276,84 +242,4 @@ abstract class DBEntityRepository<
      */
     protected fun SelectJoinStep<Record>.withConditions(conditions: List<Condition>?): SelectConnectByStep<Record> =
             conditions?.letIfAny { where(it) } ?: this
-
-    // Below is the WIP old code for working with Fluxes rather than CompletableFuture<List<T>>, in case we want to go
-    // back to that approach at some point.
-
-    /*
-
-    private fun SelectFinalStep<Record>.fetchResultsAsFlux(queryInfo: TQueryInfo, rowListener: (Row, TEntity) -> Unit)
-            : Flux<TEntity> {
-        logMessage("Creating flux")
-        return Flux.create<TEntity> { sink ->
-            sink.onRequest {
-                logMessage("Sink request received")
-                sink.ifOk<PgConnection>({ connectionPool.getConnection(it) }) { connection ->
-                    logMessage("Got DB connection")
-                    val sqlWithParams = getSQL(ParamType.INLINED)
-                    logMessage("Preparing query: $sqlWithParams")
-
-                    sink.ifOk<PgPreparedQuery>(
-                            { connection.prepare(sqlWithParams, it) }, { connection.close() }) { preparedQuery ->
-                        logMessage("Got prepared query")
-
-                        connection.begin()
-
-                        logMessage("Creating stream")
-                        Note: hard-coded value (50) below...
-                        val stream = preparedQuery.createStream(50, Tuple.tuple())
-                        stream.handler {
-                            NOTE: add error handling here
-                            try {
-                                val entity = getEntity(queryInfo, it)
-                                rowListener(it, entity)
-                                sink.next(entity)
-                            } catch (e: Exception) {
-                                sink.error(e)
-                            }
-                        }
-                        stream.exceptionHandler {
-                            logMessage("Stream error: ${it.cause}")
-                            sink.error(it)
-                        }
-                        stream.endHandler {
-                            connection.close()
-                            logMessage("Stream ended")
-                            sink.complete()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fun FluxSink<out Any>.safeExecute(block: () -> Unit) {
-        this.safeExecute({}, block)
-    }
-
-    fun FluxSink<out Any>.safeExecute(failureHandler: () -> Unit, block: () -> Unit) {
-        try {
-            block()
-        } catch (e: Exception) {
-            failureHandler()
-            error(e)
-        }
-    }
-
-    fun <T> FluxSink<out Any>.ifOk(block: (Handler<AsyncResult<T>>) -> Unit, okHandler: (T) -> Unit) =
-            this.ifOk(block, {}, okHandler)
-
-    fun <T> FluxSink<out Any>.ifOk(
-            block: (Handler<AsyncResult<T>>) -> Unit, failureHandler: () -> Unit, okHandler: (T) -> Unit) {
-        safeExecute(failureHandler) {
-            block(Handler {
-                if (it.failed()) {
-                    failureHandler()
-                    error(it.cause())
-                } else safeExecute(failureHandler) { okHandler(it.result()) }
-            })
-        }
-    }
-
-    */
 }

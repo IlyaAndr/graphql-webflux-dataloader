@@ -6,7 +6,6 @@ import com.yg.gqlwfdl.dataaccess.EntityRequestInfo
 import com.yg.gqlwfdl.services.*
 import org.dataloader.DataLoaderRegistry
 import org.springframework.stereotype.Component
-import java.util.concurrent.CompletableFuture
 
 /**
  * Class responsible for creating all the [ContextAwareDataLoader]s in the system.
@@ -59,12 +58,12 @@ class DataLoaderFactory(private val customerService: CustomerService,
                 DataLoaderType.PRODUCT_ORDER_COUNT -> createBaseDataLoader<Long, Int>(
                         requestContext) { ids, requestInfo ->
                     // Get the products with their counts, then sync those values with the passed in keys (ids), then
-                    // extract the count of each item (some of might be null if there are no orders for that product).
-                    productService.findWithOrderCount(ids, requestInfo)
-                            .thenApply { productsWithCounts ->
-                                productsWithCounts.syncWithKeys(ids) { it.id }
-                                        .map { it?.count }
-                            }
+                    // extract the count of each item. Some items in the synced list might be null if the product isn't
+                    // found, so map null to a count of 0 (as the data loader is working with non-nullable Ints).
+                    // We have to do this here as we're directly using the base ContextAwareDataLoader rather than one
+                    // of its subclasses (e.g. SimpleDataLoader, GroupingDataLoader) which normally handle this syncing
+                    // of values to keys for us.
+                    productService.findWithOrderCount(ids, requestInfo).syncWithKeys(ids) { it.id }.map { it?.count }
                 }
 
                 DataLoaderType.ORDER -> createSimpleDataLoader<Long, Order>(
@@ -95,7 +94,7 @@ class DataLoaderFactory(private val customerService: CustomerService,
      */
     private fun <K, V> createBaseDataLoader(
             requestContext: RequestContext,
-            batchLoadFunction: (List<K>, EntityRequestInfo) -> CompletableFuture<List<V?>>)
+            batchLoadFunction: suspend (List<K>, EntityRequestInfo) -> List<V?>)
             : ContextAwareDataLoader<K, V> {
 
         val childFieldStore = ClientFieldStore()
@@ -114,7 +113,7 @@ class DataLoaderFactory(private val customerService: CustomerService,
     private fun <K, V> createSimpleDataLoader(
             requestContext: RequestContext,
             keySelector: (V) -> K,
-            batchLoadFunction: (List<K>, EntityRequestInfo) -> CompletableFuture<List<V>>)
+            batchLoadFunction: suspend (List<K>, EntityRequestInfo) -> List<V>)
             : SimpleDataLoader<K, V> {
 
         val childFieldStore = ClientFieldStore()
@@ -133,7 +132,7 @@ class DataLoaderFactory(private val customerService: CustomerService,
     private fun <K, V> createGroupingDataLoader(
             requestContext: RequestContext,
             keySelector: (V) -> K,
-            batchLoadFunction: (List<K>, EntityRequestInfo) -> CompletableFuture<List<V>>)
+            batchLoadFunction: suspend (List<K>, EntityRequestInfo) -> List<V>)
             : GroupingDataLoader<K, V> {
 
         val childFieldStore = ClientFieldStore()

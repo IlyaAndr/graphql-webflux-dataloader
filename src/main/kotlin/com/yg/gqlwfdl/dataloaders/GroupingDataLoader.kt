@@ -1,7 +1,5 @@
 package com.yg.gqlwfdl.dataloaders
 
-import java.util.concurrent.CompletionStage
-
 /**
  * Implementation of [ContextAwareDataLoader] which fetches/caches items, then groups them by some property of theirs,
  * defined by the `keySelector` parameter, exposing the grouped items as a list.
@@ -15,9 +13,9 @@ import java.util.concurrent.CompletionStage
  */
 class GroupingDataLoader<K, V>(childFieldStore: ClientFieldStore,
                                keySelector: (V) -> K,
-                               loader: (List<K>) -> CompletionStage<List<V>>)
+                               loader: suspend (List<K>) -> List<V>)
     : ContextAwareDataLoader<K, List<V>>(childFieldStore,
-        { keys -> loader(keys).thenApply { it.groupBy(keySelector).syncWithKeys(keys) } })
+        { keys -> loader(keys).groupBy(keySelector).syncWithKeys(keys) })
 
 /**
  * From the receiver (a list of items which the data loader fetched by calling the `loader` function passed into the

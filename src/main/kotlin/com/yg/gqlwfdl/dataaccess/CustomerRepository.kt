@@ -6,7 +6,6 @@ import com.yg.gqlwfdl.dataaccess.joins.ClientFieldToJoinMapper
 import com.yg.gqlwfdl.dataaccess.joins.JoinedRecordToEntityConverterProvider
 import com.yg.gqlwfdl.dataaccess.joins.RecordProvider
 import com.yg.gqlwfdl.services.Customer
-import io.reactiverse.pgclient.PgPool
 import io.reactiverse.pgclient.Row
 import org.jooq.DSLContext
 import org.jooq.Record
@@ -23,12 +22,12 @@ interface CustomerRepository : EntityRepository<Customer, Long>
  */
 @Repository
 class DBCustomerRepository(create: DSLContext,
-                           connectionPool: PgPool,
+                           queryRunner: QueryRunner,
                            recordToEntityConverterProvider: JoinedRecordToEntityConverterProvider,
                            clientFieldToJoinMapper: ClientFieldToJoinMapper,
                            recordProvider: RecordProvider)
     : SingleRowDBEntityRepository<Customer, Long, CustomerRecord, QueryInfo<CustomerRecord>>(
-        create, connectionPool, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
+        create, queryRunner, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
         CUSTOMER, CUSTOMER.ID),
         CustomerRepository {
 

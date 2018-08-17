@@ -37,7 +37,7 @@ class DataLoaderPrimerEntityCreationListener(private val requestContext: Request
 
 /**
  * An object responsible for caching [TEntity] objects into a data loader supplied by the passed in [dataLoaderSupplier].
- * A supplier (a function) is used rather than taking in the actual data loader instance, becase at the point at which
+ * A supplier (a function) is used rather than taking in the actual data loader instance, because at the point at which
  * this object is created, the data loaders might not exist yet.
  */
 private class EntityCacher<TId, TEntity : Entity<out TId>>(

@@ -59,6 +59,7 @@ type Query {
   topSellingProducts(count: Int!): [Product]
   orders: [Order]
   ordersByIds(ids: [Int]!): [Order]
+  makeHttpRequest(url: String!): String
 }
 
 type Mutation {

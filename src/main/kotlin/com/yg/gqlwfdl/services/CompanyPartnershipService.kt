@@ -3,7 +3,6 @@ package com.yg.gqlwfdl.services
 import com.yg.gqlwfdl.dataaccess.CompanyPartnershipRepository
 import com.yg.gqlwfdl.dataaccess.EntityRequestInfo
 import org.springframework.stereotype.Service
-import java.util.concurrent.CompletableFuture
 
 /**
  * Service for handling functionality related to company partnerships. Communicates with the data access layer to get
@@ -12,21 +11,20 @@ import java.util.concurrent.CompletableFuture
  */
 interface CompanyPartnershipService {
     /**
-     * Returns a [CompletableFuture] which, when completed, will provide a [List] of all [CompanyPartnership] objects.
+     * Returns a [List] of all [CompanyPartnership] objects.
      *
      * @param requestInfo Information about the request, such as the fields of the entity which were requested by the
      * client, if the call was made from the context of a client request.
      */
-    fun findAll(requestInfo: EntityRequestInfo?): CompletableFuture<List<CompanyPartnership>>
+    suspend fun findAll(requestInfo: EntityRequestInfo?): List<CompanyPartnership>
 
     /**
-     * Returns a [CompletableFuture] which, when completed, will provide a [List] of all [CompanyPartnership] objects
-     * with the passed in IDs.
+     * Returns all [CompanyPartnership] objects with the passed in IDs.
      *
      * @param requestInfo Information about the request, such as the fields of the entity which were requested by the
      * client, if the call was made from the context of a client request.
      */
-    fun findByIds(ids: List<Long>, requestInfo: EntityRequestInfo? = null): CompletableFuture<List<CompanyPartnership>>
+    suspend fun findByIds(ids: List<Long>, requestInfo: EntityRequestInfo? = null): List<CompanyPartnership>
 }
 
 /**
@@ -36,8 +34,8 @@ interface CompanyPartnershipService {
 class DefaultCompanyPartnershipService(private val companyPartnershipRepository: CompanyPartnershipRepository)
     : CompanyPartnershipService {
 
-    override fun findAll(requestInfo: EntityRequestInfo?) = companyPartnershipRepository.findAll(requestInfo)
+    override suspend fun findAll(requestInfo: EntityRequestInfo?) = companyPartnershipRepository.findAll(requestInfo)
 
-    override fun findByIds(ids: List<Long>, requestInfo: EntityRequestInfo?) =
+    override suspend fun findByIds(ids: List<Long>, requestInfo: EntityRequestInfo?) =
             companyPartnershipRepository.findByIds(ids, requestInfo)
 }

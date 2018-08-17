@@ -10,28 +10,24 @@ import com.yg.gqlwfdl.dataaccess.joins.RecordProvider
 import com.yg.gqlwfdl.dataloaders.customerOrderDataLoader
 import com.yg.gqlwfdl.services.Customer
 import com.yg.gqlwfdl.services.Order
-import io.reactiverse.pgclient.PgPool
 import io.reactiverse.pgclient.Row
 import org.jooq.Condition
 import org.jooq.DSLContext
 import org.jooq.Record
 import org.jooq.Table
 import org.springframework.stereotype.Repository
-import java.util.concurrent.CompletableFuture
 
 /**
  * Repository providing access to order information.
  */
 interface OrderRepository : EntityRepository<Order, Long> {
     /**
-     * Returns a [CompletableFuture] which, when completed, will provide a [List] of all [Order] objects belonging
-     * to [Customer]s with the passed in [customerIds].
+     * Returns a [List] of all [Order] objects belonging to [Customer]s with the passed in [customerIds].
      *
      * @param requestInfo Information about the request, such as the fields of the entity which were requested by the
      * client, if the call was made from the context of a client request.
      */
-    fun findByCustomerIds(customerIds: List<Long>, requestInfo: EntityRequestInfo? = null):
-            CompletableFuture<List<Order>>
+    suspend fun findByCustomerIds(customerIds: List<Long>, requestInfo: EntityRequestInfo? = null): List<Order>
 }
 
 /**
@@ -39,25 +35,24 @@ interface OrderRepository : EntityRepository<Order, Long> {
  */
 @Repository
 class DBOrderRepository(create: DSLContext,
-                        connectionPool: PgPool,
+                        queryRunner: QueryRunner,
                         recordToEntityConverterProvider: JoinedRecordToEntityConverterProvider,
                         clientFieldToJoinMapper: ClientFieldToJoinMapper,
                         recordProvider: RecordProvider)
     : DBEntityRepository<Order, Long, OrderRecord, OrderQueryInfo>(
-        create, connectionPool, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
+        create, queryRunner, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
         ORDER, ORDER.ID),
         OrderRepository {
 
-    override fun findByCustomerIds(customerIds: List<Long>, requestInfo: EntityRequestInfo?): CompletableFuture<List<Order>> {
+    override suspend fun findByCustomerIds(customerIds: List<Long>, requestInfo: EntityRequestInfo?): List<Order> {
         // Find all orders for the supplied customer IDs. The "find" method will cache the individual orders ...
         return find(requestInfo) { queryInfo -> listOf(queryInfo.primaryTable.field(ORDER.CUSTOMER).`in`(customerIds)) }
                 // ... but when we have the results, before returning them first cache the orders which belong to each
                 // customer. i.e. for each customer add a cache entry whose ID is the customer ID, and whose value is a
                 // list of the orders belonging to that customer.
-                .whenComplete { orders, _ ->
-                    if (orders != null && requestInfo?.context != null) {
-                        // Group the orders by the customer ID then for each entry (i.e. each customer) cache its
-                        // orders.
+                .also { orders ->
+                    if (requestInfo?.context != null) {
+                        // Group the orders by the customer ID then for each entry (i.e. each customer) cache its orders.
                         orders.groupBy { it.customerId }.forEach {
                             requestInfo.context.customerOrderDataLoader.prime(it.key, it.value)
                         }
@@ -65,8 +60,8 @@ class DBOrderRepository(create: DSLContext,
                 }
     }
 
-    override fun find(requestInfo: EntityRequestInfo?, conditionProvider: ((OrderQueryInfo) -> List<Condition>)?)
-            : CompletableFuture<List<Order>> {
+    override suspend fun find(requestInfo: EntityRequestInfo?, conditionProvider: ((OrderQueryInfo) -> List<Condition>)?)
+            : List<Order> {
 
         val queryInfo = OrderQueryInfo(ORDER)
 
@@ -99,9 +94,8 @@ class DBOrderRepository(create: DSLContext,
                 .withConditions(conditionProvider?.invoke(queryInfo))
                 .orderBy(queryInfo.primaryTable.field(ORDER.ID))
 
-        return finalQuery.fetchRowsAsync().thenApply {
-            getEntities(queryInfo, it, requestInfo?.entityCreationListener, joinInstanceSets)
-        }
+        return getEntities(queryInfo, queryRunner.fetchResults(finalQuery), requestInfo?.entityCreationListener,
+                joinInstanceSets)
     }
 
     /**

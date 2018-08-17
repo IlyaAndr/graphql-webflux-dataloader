@@ -12,6 +12,9 @@ and has been expanded to:
 * Add support for data caching/batching using DataLoader
 * Add some custom functionality related to adding database joins based on requested GraphQL fields.
 * Show how data can be fetched from an underlying Postgres database using a combination of jOOQ and reactive-pg-client.
+* Show how Kotlin coroutines can be used throughout, wrapped in
+[CompletableFutures](https://docs.oracle.com/javase/10/docs/api/java/util/concurrent/CompletableFuture.html) only at the
+very top level where the GraphQL libraries need them (i.e. in the GraphQL resolvers).
 
 The application shows how a GraphQL endpoint can be exposed using Spring WebFlux, in a Spring Boot application. GraphQL
 requests are handled in a non-blocking way (with non-blocking database access being supplied by the reactive-pg-client
@@ -154,6 +157,7 @@ mentioned, and possibly some other tweaking.
 [fetchAsync](https://www.jooq.org/doc/3.11/manual/sql-execution/fetching/later-fetching/) method, which relies on
 delegating work to a dedicated thread pool.
 * Postgres database (running in a Docker container) swapped in for previous use of H2 database.
+* Coroutines introduced.
 
 ## To Do
 * Currently this only works with one-to-one and many-to-one joins: one-to-many joins change the number of returned

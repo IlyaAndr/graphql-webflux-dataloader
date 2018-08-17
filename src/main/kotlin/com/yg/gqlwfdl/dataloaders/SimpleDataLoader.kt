@@ -1,18 +1,16 @@
 package com.yg.gqlwfdl.dataloaders
 
-import java.util.concurrent.CompletionStage
-
 /**
- * Implementation of [ContextAwareDataLoader] which simply fetches/caches items, caching them by some unique ID property,
+ * Implementation of [ContextAwareDataLoader] which simply fetches/caches items, caching them by some unique ID property.
  *
  * Also responsible for ensuring that when items are returned from a data loader, they are returned in the exact order
  * in which they were requested (as this is part of the data loader contract).
  */
 class SimpleDataLoader<K, V>(childFieldStore: ClientFieldStore,
                              keySelector: (V) -> K,
-                             loader: (List<K>) -> CompletionStage<List<V>>)
+                             loader: suspend (List<K>) -> List<V>)
     : ContextAwareDataLoader<K, V>(childFieldStore,
-        { keys -> loader(keys).thenApply { it.syncWithKeys(keys, keySelector) } })
+        { keys -> loader(keys).syncWithKeys(keys, keySelector) })
 
 /**
  * From the receiver (a list of items which the data loader fetched by calling the `loader` function passed into the

@@ -9,26 +9,24 @@ import com.yg.gqlwfdl.dataaccess.joins.RecordProvider
 import com.yg.gqlwfdl.dataloaders.productOrderCountDataLoader
 import com.yg.gqlwfdl.services.EntityWithCount
 import com.yg.gqlwfdl.services.Product
-import io.reactiverse.pgclient.PgPool
 import io.reactiverse.pgclient.Row
 import org.jooq.*
 import org.jooq.impl.DSL.count
 import org.springframework.stereotype.Repository
-import java.util.concurrent.CompletableFuture
 
 /**
  * Repository providing access to product information.
  */
 interface ProductRepository : EntityRepository<Product, Long> {
     /**
-     * Returns a [CompletableFuture] which, when completed, will provide a [List] of all [Product] objects with the
+     * Returns all [Product] objects with the
      * passed in IDs, along with their order counts, wrapped in an [EntityWithCount] object.
      *
      * @param requestInfo Information about the request, such as the fields of the entity which were requested by the
      * client, if the call was made from the context of a client request.
      */
-    fun findWithOrderCount(ids: List<Long>, requestInfo: EntityRequestInfo? = null):
-            CompletableFuture<List<EntityWithCount<Long, Product>>>
+    suspend fun findWithOrderCount(ids: List<Long>, requestInfo: EntityRequestInfo? = null):
+            List<EntityWithCount<Long, Product>>
 
     /**
      * Gets the top [count] best selling products.
@@ -36,8 +34,8 @@ interface ProductRepository : EntityRepository<Product, Long> {
      * @param requestInfo Information about the request, such as the fields of the entity which were requested by the
      * client, if the call was made from the context of a client request.
      */
-    fun findTopSelling(count: Int, requestInfo: EntityRequestInfo? = null):
-            CompletableFuture<List<EntityWithCount<Long, Product>>>
+    suspend fun findTopSelling(count: Int, requestInfo: EntityRequestInfo? = null):
+            List<EntityWithCount<Long, Product>>
 }
 
 /**
@@ -45,23 +43,23 @@ interface ProductRepository : EntityRepository<Product, Long> {
  */
 @Repository
 class DBProductRepository(create: DSLContext,
-                          connectionPool: PgPool,
+                          queryRunner: QueryRunner,
                           recordToEntityConverterProvider: JoinedRecordToEntityConverterProvider,
                           clientFieldToJoinMapper: ClientFieldToJoinMapper,
                           recordProvider: RecordProvider)
     : SingleRowDBEntityRepository<Product, Long, ProductRecord, QueryInfo<ProductRecord>>(
-        create, connectionPool, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
+        create, queryRunner, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
         PRODUCT, PRODUCT.ID),
         ProductRepository {
 
-    override fun findWithOrderCount(ids: List<Long>, requestInfo: EntityRequestInfo?) =
+    override suspend fun findWithOrderCount(ids: List<Long>, requestInfo: EntityRequestInfo?) =
             findWithOrderCount(requestInfo) { listOf(it.primaryTable.field(PRODUCT.ID).`in`(ids)) }
 
     override fun getEntity(queryInfo: QueryInfo<ProductRecord>, row: Row) = row.toProductRecord(queryInfo).toEntity()
 
-    override fun find(requestInfo: EntityRequestInfo?,
-                      conditionProvider: ((QueryInfo<ProductRecord>) -> List<Condition>)?)
-            : CompletableFuture<List<Product>> {
+    override suspend fun find(requestInfo: EntityRequestInfo?,
+                              conditionProvider: ((QueryInfo<ProductRecord>) -> List<Condition>)?)
+            : List<Product> {
 
         // Request included the "orderCount" GraphQL field: this means that we need to join to a nested SQL query
         // which will count the number of orders for each product. Call the findWithOrderCount, which will return
@@ -70,14 +68,13 @@ class DBProductRepository(create: DSLContext,
         // returning the values, map them back to the Product entities themselves.
         return if (requestInfo?.containsChildField("orderCount") == true)
         // Set includeProductsWithNoOrders to true as we want to include products that haven't been sold.
-            findWithOrderCount(requestInfo, null, null, true, conditionProvider)
-                    .thenApply { results -> results.map { it.entity } }
+            findWithOrderCount(requestInfo, null, null, true, conditionProvider).map { it.entity }
         else
         // Can just use base class's behaviour.
             super.find(requestInfo, conditionProvider)
     }
 
-    override fun findTopSelling(count: Int, requestInfo: EntityRequestInfo?) =
+    override suspend fun findTopSelling(count: Int, requestInfo: EntityRequestInfo?) =
     // Leave includeProductsWithNoOrders at its default of false: top selling products shouldn't include
     // products that haven't been sold.
             findWithOrderCount(requestInfo, SortOrder.DESC, count)
@@ -87,15 +84,15 @@ class DBProductRepository(create: DSLContext,
      * joins to a nested table which is a SELECT which joins [PRODUCT] to [ORDER_LINE], returning only the product ID
      * and counting the orders.
      *
-     * Returns a [CompletableFuture] which will complete when the query returns results, and exposes a [List] of
-     * [Product]s along with the number of orders for that product, wrapped in an [EntityWithCount] object.
+     * Returns a [List] of [Product]s along with the number of orders for that product, wrapped in an [EntityWithCount]
+     * object.
      */
-    private fun findWithOrderCount(requestInfo: EntityRequestInfo? = null,
-                                   orderCountSortOrder: SortOrder? = null,
-                                   limit: Int? = null,
-                                   includeProductsWithNoOrders: Boolean = false,
-                                   conditionProvider: ((QueryInfo<ProductRecord>) -> List<Condition>)? = null)
-            : CompletableFuture<List<EntityWithCount<Long, Product>>> {
+    private suspend fun findWithOrderCount(requestInfo: EntityRequestInfo? = null,
+                                           orderCountSortOrder: SortOrder? = null,
+                                           limit: Int? = null,
+                                           includeProductsWithNoOrders: Boolean = false,
+                                           conditionProvider: ((QueryInfo<ProductRecord>) -> List<Condition>)? = null)
+            : List<EntityWithCount<Long, Product>> {
 
         // TODO: can we generalise this derived table (e.g. as a new type of JoinDefinition maybe?) so that if requests
         // come in for other objects, which contain joins to product, this will be picked up?  e.g. if requesting

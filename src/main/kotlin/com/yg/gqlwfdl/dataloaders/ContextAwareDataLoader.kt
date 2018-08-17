@@ -2,9 +2,9 @@ package com.yg.gqlwfdl.dataloaders
 
 import com.yg.gqlwfdl.ClientField
 import com.yg.gqlwfdl.services.Entity
+import kotlinx.coroutines.experimental.future.future
 import org.dataloader.BatchLoader
 import org.dataloader.DataLoader
-import java.util.concurrent.CompletionStage
 
 /**
  * Data loader which is aware of the context in which it was called, for example being aware of the [ClientField]s
@@ -18,5 +18,5 @@ import java.util.concurrent.CompletionStage
  * type [K]. Must return values in a corresponding order to the passed in keys, as that's part of the data loader contract.
  */
 open class ContextAwareDataLoader<K, V>(val childFieldStore: ClientFieldStore,
-                                        loader: (List<K>) -> CompletionStage<List<V?>>)
-    : DataLoader<K, V>(BatchLoader(loader))
+                                        loader: suspend (List<K>) -> List<V?>)
+    : DataLoader<K, V>(BatchLoader { keys -> future { loader(keys) } })

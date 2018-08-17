@@ -7,10 +7,8 @@ import com.yg.gqlwfdl.dataaccess.joins.RecordProvider
 import com.yg.gqlwfdl.letIfAny
 import com.yg.gqlwfdl.services.Entity
 import com.yg.gqlwfdl.services.EntityWrapper
-import io.reactiverse.pgclient.PgPool
 import io.reactiverse.pgclient.Row
 import org.jooq.*
-import java.util.concurrent.CompletableFuture
 
 /**
  * A repository providing access to an entity (aka domain model object) (of type [TEntity]), by querying one or more
@@ -19,13 +17,13 @@ import java.util.concurrent.CompletableFuture
 abstract class SingleRowDBEntityRepository<
         TEntity : Entity<TId>, TId : Any, TRecord : TableRecord<TRecord>, TQueryInfo : QueryInfo<TRecord>>(
         create: DSLContext,
-        connectionPool: PgPool,
+        queryRunner: QueryRunner,
         recordToEntityConverterProvider: JoinedRecordToEntityConverterProvider,
         clientFieldToJoinMapper: ClientFieldToJoinMapper,
         recordProvider: RecordProvider,
         table: Table<TRecord>,
         idField: TableField<TRecord, TId>)
-    : DBEntityRepository<TEntity, TId, TRecord, TQueryInfo>(create, connectionPool, recordToEntityConverterProvider,
+    : DBEntityRepository<TEntity, TId, TRecord, TQueryInfo>(create, queryRunner, recordToEntityConverterProvider,
         clientFieldToJoinMapper, recordProvider, table, idField) {
 
     /**
@@ -46,9 +44,9 @@ abstract class SingleRowDBEntityRepository<
      * @param conditionProvider The object that will supply any conditions that should be added to the query. If null,
      * no conditions are applied, and every record is returned.
      */
-    override fun find(requestInfo: EntityRequestInfo?,
-                      conditionProvider: ((TQueryInfo) -> List<Condition>)?)
-            : CompletableFuture<List<TEntity>> {
+    override suspend fun find(requestInfo: EntityRequestInfo?,
+                              conditionProvider: ((TQueryInfo) -> List<Condition>)?)
+            : List<TEntity> {
 
         return find(
                 entityProvider = this::getEntity,
@@ -78,10 +76,8 @@ abstract class SingleRowDBEntityRepository<
      * in a way that can't be handled by the standard [JoinRequest] object model.
      * @param orderBy An optional list of fields to sort by.
      * @param limit An optional limit to the number of rows to return.
-     * @return A [CompletableFuture] which will be completed when the query returns its results, and which will expose
-     * the results as a [List] of [TResult] objects.
      */
-    protected fun <TResult : Entity<out Any>> find(
+    protected suspend fun <TResult : Entity<out Any>> find(
             entityProvider: (TQueryInfo, Row) -> TResult,
             queryInfo: TQueryInfo = getQueryInfo(),
             entityCreationListener: EntityCreationListener? = null,
@@ -91,7 +87,7 @@ abstract class SingleRowDBEntityRepository<
             customJoiner: ((TQueryInfo, SelectJoinStep<Record>) -> Unit)? = null,
             orderBy: List<OrderField<out Any>>? = null,
             limit: Int? = null)
-            : CompletableFuture<List<TResult>> {
+            : List<TResult> {
 
         // Get all the join instance sets required: the default joins plus the requested joins (i.e. those based on the
         // requested client fields).
@@ -109,24 +105,21 @@ abstract class SingleRowDBEntityRepository<
         val orderedQuery = orderBy?.letIfAny { unorderedQuery.orderBy(it) } ?: unorderedQuery
         val finalQuery = limit?.let { orderedQuery.limit(it) } ?: orderedQuery
 
-        return finalQuery.fetchRowsAsync().thenApply { rows ->
-            // Map the rows to the entities and return them.
-            rows.map { row ->
-                val entity = entityProvider(queryInfo, row)
-                if (entityCreationListener != null) {
-                    // We need to inform the listener of all the entities, so inform it of the main entity, then
-                    // get all the joined entities and inform it of them too.
-                    entityCreationListener.onEntityCreated(entity)
+        return queryRunner.fetchResults(finalQuery).map { row ->
+            val entity = entityProvider(queryInfo, row)
+            if (entityCreationListener != null) {
+                // We need to inform the listener of all the entities, so inform it of the main entity, then
+                // get all the joined entities and inform it of them too.
+                entityCreationListener.onEntityCreated(entity)
 
-                    if (entity is EntityWrapper<*, *>)
-                        entityCreationListener.onEntityCreated(entity.entity)
+                if (entity is EntityWrapper<*, *>)
+                    entityCreationListener.onEntityCreated(entity.entity)
 
-                    joinInstanceSets
-                            .flatMap { it.getJoinedEntities(row, queryInfo, recordProvider, recordToEntityConverterProvider) }
-                            .forEach { entityCreationListener.onEntityCreated(it) }
-                }
-                entity
+                joinInstanceSets
+                        .flatMap { it.getJoinedEntities(row, queryInfo, recordProvider, recordToEntityConverterProvider) }
+                        .forEach { entityCreationListener.onEntityCreated(it) }
             }
+            entity
         }
     }
 

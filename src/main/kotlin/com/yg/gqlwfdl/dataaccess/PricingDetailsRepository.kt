@@ -10,7 +10,6 @@ import com.yg.gqlwfdl.services.DiscountRate
 import com.yg.gqlwfdl.services.PaymentMethod
 import com.yg.gqlwfdl.services.PricingDetails
 import com.yg.gqlwfdl.services.VatRate
-import io.reactiverse.pgclient.PgPool
 import io.reactiverse.pgclient.Row
 import org.jooq.DSLContext
 import org.jooq.Record
@@ -28,12 +27,12 @@ interface PricingDetailsRepository : EntityRepository<PricingDetails, Long>
  */
 @Repository
 class DBPricingDetailsRepository(create: DSLContext,
-                                 connectionPool: PgPool,
+                                 queryRunner: QueryRunner,
                                  recordToEntityConverterProvider: JoinedRecordToEntityConverterProvider,
                                  clientFieldToJoinMapper: ClientFieldToJoinMapper,
                                  recordProvider: RecordProvider)
     : SingleRowDBEntityRepository<PricingDetails, Long, PricingDetailsRecord, PricingDetailsQueryInfo>(
-        create, connectionPool, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
+        create, queryRunner, recordToEntityConverterProvider, clientFieldToJoinMapper, recordProvider,
         PRICING_DETAILS, PRICING_DETAILS.ID),
         PricingDetailsRepository {
 

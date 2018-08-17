@@ -3,7 +3,6 @@ package com.yg.gqlwfdl.services
 import com.yg.gqlwfdl.dataaccess.EntityRequestInfo
 import com.yg.gqlwfdl.dataaccess.PricingDetailsRepository
 import org.springframework.stereotype.Service
-import java.util.concurrent.CompletableFuture
 
 /**
  * Service for handling functionality related to pricing details.  Communicates with the data access layer to get
@@ -12,21 +11,20 @@ import java.util.concurrent.CompletableFuture
  */
 interface PricingDetailsService {
     /**
-     * Returns a [CompletableFuture] which, when completed, will provide a [List] of all [PricingDetails] objects.
+     * Returns all [PricingDetails] objects.
      *
      * @param requestInfo Information about the request, such as the fields of the entity which were requested by the
      * client, if the call was made from the context of a client request.
      */
-    fun findAll(requestInfo: EntityRequestInfo? = null): CompletableFuture<List<PricingDetails>>
+    suspend fun findAll(requestInfo: EntityRequestInfo? = null): List<PricingDetails>
 
     /**
-     * Returns a [CompletableFuture] which, when completed, will provide a [List] of all [PricingDetails] objects
-     * with the passed in IDs.
+     * Returns all [PricingDetails] objects with the passed in IDs.
      *
      * @param requestInfo Information about the request, such as the fields of the entity which were requested by the
      * client, if the call was made from the context of a client request.
      */
-    fun findByIds(ids: List<Long>, requestInfo: EntityRequestInfo? = null): CompletableFuture<List<PricingDetails>>
+    suspend fun findByIds(ids: List<Long>, requestInfo: EntityRequestInfo? = null): List<PricingDetails>
 }
 
 /**
@@ -36,8 +34,8 @@ interface PricingDetailsService {
 class DefaultPricingDetailsService(private val pricingDetailsRepository: PricingDetailsRepository)
     : PricingDetailsService {
 
-    override fun findAll(requestInfo: EntityRequestInfo?) = pricingDetailsRepository.findAll(requestInfo)
+    override suspend fun findAll(requestInfo: EntityRequestInfo?) = pricingDetailsRepository.findAll(requestInfo)
 
-    override fun findByIds(ids: List<Long>, requestInfo: EntityRequestInfo?) =
+    override suspend fun findByIds(ids: List<Long>, requestInfo: EntityRequestInfo?) =
             pricingDetailsRepository.findByIds(ids, requestInfo)
 }

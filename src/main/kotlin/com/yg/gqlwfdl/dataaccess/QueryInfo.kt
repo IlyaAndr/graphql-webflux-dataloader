@@ -54,7 +54,7 @@ open class QueryInfo<TRecord : Record>(sourceTable: Table<TRecord>) {
      * @param parentTable The parent table to which the passed in [table] was joined.
      * @param joinName The name of the join which caused the [table] to be joined. Used when generating an alias for the
      * table.
-     * @param trimIfTooLong Whether to trim the alias if it's too long (i.e. longer than 4 characters). Defauls to true.
+     * @param trimIfTooLong Whether to trim the alias if it's too long (i.e. longer than 4 characters). Defaults to true.
      * Set this to false if hard-coded aliases are being used, which shouldn't be trimmed.
      */
     fun <TRecord : Record> addJoinedTable(table: Table<TRecord>, parentTable: Table<out Record>, joinName: String,
