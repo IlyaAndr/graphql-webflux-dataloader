@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Configuration
 
 /**
  * Object providing configuration information related to working with the database (e.g. the URL to access it). The data
- * for this object is read from the application.properties file.
+ * for this object is read from the application.yml file.
  *
  * @property url The URL used to connect to the database.
  * @property username The user name to use to connect to the database.

@@ -2,6 +2,8 @@ package com.yg.gqlwfdl
 
 import com.coxautodev.graphql.tools.SchemaParser
 import com.coxautodev.graphql.tools.SchemaParserOptions
+import com.yg.gqlwfdl.auditing.AuditController
+import com.yg.gqlwfdl.auditing.AuditRecord
 import com.yg.gqlwfdl.dataaccess.DBConfig
 import com.yg.gqlwfdl.dataloaders.DataLoaderFactory
 import com.yg.gqlwfdl.resolvers.*
@@ -40,10 +42,11 @@ class GraphQLRoutes(customerService: CustomerService,
                     productService: ProductService,
                     orderService: OrderService,
                     private val dataLoaderFactory: DataLoaderFactory,
-                    dbConfig: DBConfig) {
+                    dbConfig: DBConfig,
+                    auditController: AuditController) {
 
     private val schema = buildSchema(customerService, companyService, companyPartnershipService, productService,
-            orderService, dbConfig)
+            orderService, dbConfig, auditController)
 
     /**
      * Sets up the routes (i.e. handles GET and POST to /graphql, and also serves up the graphiql HTML page).
@@ -129,7 +132,8 @@ private fun buildSchema(customerService: CustomerService,
                         companyPartnershipService: CompanyPartnershipService,
                         productService: ProductService,
                         orderService: OrderService,
-                        dbConfig: DBConfig): GraphQLSchema {
+                        dbConfig: DBConfig,
+                        auditController: AuditController): GraphQLSchema {
 
     return SchemaParser.newParser()
             .file("schema.graphqls")
@@ -140,8 +144,10 @@ private fun buildSchema(customerService: CustomerService,
                     PricingDetailsResolver(),
                     ProductResolver(),
                     OrderResolver(),
-                    Mutation(dbConfig))
-            .dictionary("OrderLine", Order.Line::class.java)
+                    Mutation(dbConfig, auditController))
+            .dictionary(mapOf(
+                    Pair("OrderLine", Order.Line::class.java),
+                    Pair("AuditRecordInput", AuditRecord.CreationRequest::class.java)))
             .options(SchemaParserOptions.newOptions()
                     .genericWrappers(SchemaParserOptions.GenericWrapper(Mono::class.java, 0))
                     .build())

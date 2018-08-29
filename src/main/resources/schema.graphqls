@@ -50,6 +50,17 @@ type Order {
   lines: [OrderLine]!
 }
 
+type AuditRecord {
+  id: ID!
+  customerId: Long!
+  description: String!
+}
+
+input AuditRecordInput {
+  customerId: Long!
+  description: String!
+}
+
 type Query {
   customers: [Customer]
   customersByIds(ids: [Int]!): [Customer]
@@ -60,10 +71,14 @@ type Query {
   orders: [Order]
   ordersByIds(ids: [Int]!): [Order]
   makeHttpRequest(url: String!): String
+  customersRemoteDirect(url: String!): [Customer]
+  auditRecords: [AuditRecord]
 }
 
 type Mutation {
    createTestData: String
+   createAuditRecord(request: AuditRecordInput!): AuditRecord
+   createAuditRecordQueued(request: AuditRecordInput!): String
 }
 
 schema {

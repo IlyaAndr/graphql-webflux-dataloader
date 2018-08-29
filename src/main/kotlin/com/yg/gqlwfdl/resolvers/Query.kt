@@ -1,6 +1,7 @@
 package com.yg.gqlwfdl.resolvers
 
 import com.coxautodev.graphql.tools.GraphQLQueryResolver
+import com.yg.gqlwfdl.auditing.AuditRecord
 import com.yg.gqlwfdl.awaitResult
 import com.yg.gqlwfdl.logMessage
 import com.yg.gqlwfdl.services.*
@@ -91,9 +92,35 @@ class Query(private val customerService: CustomerService,
             WebClient
                     .create(url)
                     .get()
-                    .accept(MediaType.TEXT_HTML)
+                    .accept(MediaType.TEXT_HTML, MediaType.TEXT_PLAIN, MediaType.APPLICATION_JSON)
                     .retrieve()
                     .bodyToMono<String>()
+                    .awaitResult()
+        }
+    }
+
+    fun customersRemoteDirect(url: String): CompletableFuture<List<Customer>> {
+        return future {
+            logMessage("Making HTTP request for customers to $url")
+            WebClient
+                    .create(url)
+                    .get()
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .bodyToMono<List<Customer>>()
+                    .awaitResult()
+        }
+    }
+
+    fun auditRecords(): CompletableFuture<List<AuditRecord>> {
+        return future {
+            logMessage("Making HTTP request for all audit records")
+            WebClient
+                    .create("http://localhost:8081/audit/")
+                    .get()
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .bodyToMono<List<AuditRecord>>()
                     .awaitResult()
         }
     }

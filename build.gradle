@@ -67,6 +67,9 @@ dependencies {
     compile("org.jetbrains.kotlinx:kotlinx-coroutines-core:0.24.0")
     compile("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:0.24.0")
     compile("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:0.24.0")
+    compile("org.springframework.boot:spring-boot-starter-amqp")
+
+    compile("org.springframework.boot:spring-boot-configuration-processor")
 
     runtime("org.springframework.boot:spring-boot-devtools")
     runtime("org.junit.jupiter:junit-jupiter-engine")

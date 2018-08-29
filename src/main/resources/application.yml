@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/gqlwfdl
+    username: postgres
+    password: postgres
+    max-active: 3
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: guest
+    password: guest
+
+destinations:
+  queues:
+    audit:
+      exchange: audit
+      routing-key: audit
