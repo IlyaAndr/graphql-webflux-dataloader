@@ -18,7 +18,7 @@ import org.springframework.stereotype.Repository
  */
 interface CompanyPartnershipRepository : EntityRepository<CompanyPartnership, Long>
 
-// test 2
+// test 3
 
 /**
  * Concrete implementation of [CompanyPartnershipRepository], which uses a database for its data.
